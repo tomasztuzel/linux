@@ -174,6 +174,9 @@ static int pl031_stv2_read_time(struct device *dev, struct rtc_time *tm)
 	pl031_stv2_time_to_tm(readl(ldata->base + RTC_DR),
 			readl(ldata->base + RTC_YDR), tm);
 
+	//long unsigned data = readl(ldata->base + RTC_YLR);
+	//dev_dbg(dev, "XXX pl031_stv2_read_time data = 0x%lx\n", data);
+
 	return 0;
 }
 
@@ -251,8 +254,30 @@ static irqreturn_t pl031_interrupt(int irq, void *dev_id)
 static int pl031_read_time(struct device *dev, struct rtc_time *tm)
 {
 	struct pl031_local *ldata = dev_get_drvdata(dev);
+	volatile unsigned char data;
+	unsigned int i, j;
 
 	rtc_time_to_tm(readl(ldata->base + RTC_DR), tm);
+
+	//long unsigned data = readl(ldata->base + RTC_YLR);
+	//dev_dbg(dev, "XXX pl031_read_time data = 0x%lx\n", data);
+
+	data = readl(ldata->base + RTC_YLR);
+	dev_dbg(dev, "XXX pl031_read_alarm data = 0x%x\n", data);
+	//for (i = 0; i < 0x1000 ; i++) {
+	////for (i = 0x1c; i < 0x21 ; i++) {
+	//	writeb(0xe, ldata->base + i);
+	//}
+	//writel(0xabcd, ldata->base + 8); // XXX
+	//for (j = 0; j < 0x1000 ; j++) {
+		for (i = 0; i < 0x1000 ; i++) {
+		//for (i = 0; i < 0x8 ; i++) {
+			//writeb(j, ldata->base + i); // XXX
+			writeb(0xe, ldata->base + i); // XXX
+			data = readb(ldata->base + i);
+			dev_dbg(dev, "XXX pl031_read_alarm data[%x] = 0x%x\n", i, data);
+		}
+	//}
 
 	return 0;
 }
@@ -349,7 +374,17 @@ static int pl031_probe(struct amba_device *adev, const struct amba_id *id)
 	dev_dbg(&adev->dev, "designer ID = 0x%02x\n", amba_manf(adev));
 	dev_dbg(&adev->dev, "revision = 0x%01x\n", amba_rev(adev));
 
-	data = readl(ldata->base + RTC_CR);
+	data = readl(ldata->base + RTC_DR);
+	dev_dbg(&adev->dev, "XXX data = 0x%lx\n", data);
+	data = readl(ldata->base + RTC_TDR);
+	dev_dbg(&adev->dev, "XXX data = 0x%lx\n", data);
+	data = readl(ldata->base + RTC_YDR);
+	dev_dbg(&adev->dev, "XXX data = 0x%lx\n", data);
+	data = readl(ldata->base + RTC_YLR);
+	dev_dbg(&adev->dev, "XXX data = 0x%lx\n", data);
+	writel(0xabcd, ldata->base + RTC_YLR);
+	data = readl(ldata->base + RTC_YLR);
+	dev_dbg(&adev->dev, "XXX data = 0x%lx\n", data);
 	/* Enable the clockwatch on ST Variants */
 	if (vendor->clockwatch)
 		data |= RTC_CR_CWEN;
