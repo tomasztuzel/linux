@@ -25,6 +25,21 @@
 #include <linux/delay.h>
 #include <linux/pm_wakeirq.h>
 #include <linux/slab.h>
+#include <asm/tlbflush.h>
+#include <asm/hwcap.h>
+#include <asm/sysreg.h>
+
+#define get_cpu_ftr(id) ({					\
+		unsigned long __val;				\
+		asm("mrs %0, "#id : "=r" (__val));		\
+		dev_dbg(dev, "XXX pl031_read_time %-20s: 0x%016lx\n", #id, __val); \
+	})
+		/*printf("%-20s: 0x%016lx\n", #id, __val);	\*/
+#define get_cpu_ftr_sys(id) ({					\
+		u64 __val;							\
+		asm volatile("mrs_s %0, " __stringify(id) : "=r" (__val));	\
+		dev_dbg(dev, "XXX pl031_read_time %-20s: 0x%016llx\n", #id, __val); \
+	})
 
 /*
  * Register definitions
@@ -256,14 +271,57 @@ static int pl031_read_time(struct device *dev, struct rtc_time *tm)
 	struct pl031_local *ldata = dev_get_drvdata(dev);
 	volatile unsigned char data;
 	unsigned int i, j;
+	volatile unsigned long val;
 
 	rtc_time_to_tm(readl(ldata->base + RTC_DR), tm);
+
+////	https://android.googlesource.com/kernel/bcm/+/android-wear-5.0.2_r0.5/arch/arm64/include/asm/arch_timer.h
+////	for (j = 0; j < 0x5 ; j++) {
+////		asm volatile("mcr p15, 0, %0, c14, c3, 1" : : "r" (val));
+////		dev_dbg(dev, "XXX pl031_read_time val = 0x%x\n", val);
+////	}
+//	for (j = 0; j < 0x5 ; j++) {
+//    	asm volatile("msr cntv_ctl_el0,  %0" : : "r" (val));
+//		dev_dbg(dev, "XXX pl031_read_time val msr1 = 0x%x\n", val);
+//	}
+//	for (j = 0; j < 0x5 ; j++) {
+//    	asm volatile("mrs %0, cntp_tval_el0" : "=r" (val));
+//		dev_dbg(dev, "XXX pl031_read_time val mrs1 = 0x%x\n", val);
+//	}
+//	for (j = 0; j < 0x5 ; j++) {
+//    	asm volatile("mrs %0, cntv_tval_el0" : "=r" (val));
+//		dev_dbg(dev, "XXX pl031_read_time val mrs2 = 0x%x\n", val);
+//	}
+//	asm volatile("msr nzcv, x0" : "=r" (val));
+//	dev_dbg(dev, "XXX pl031_read_time val: mrs nzcv, x0 = 0x%x\n", val);
+//	asm volatile("ldp q1, q3, [x5], #256" : "=r" (val));
+//	dev_dbg(dev, "XXX pl031_read_time val: ldp q1, q3, [x5], #256 = 0x%x\n", val);
+//	asm volatile("ldr w0, [x5, 0x95]!" : "=r" (val));
+//	dev_dbg(dev, "XXX pl031_read_time val: ldr w0, [x5, 0x95]! = 0x%x\n", val);
+//	asm volatile("mrs x0, SCTLR_EL1" : "=r" (val));
+//	dev_dbg(dev, "XXX pl031_read_time val: mrs x0, SCTLR_EL1 = 0x%x\n", val);
+//	asm volatile("smc 0" : "=r" (val));
+//	dev_dbg(dev, "XXX pl031_read_time val: smc 0 = 0x%x\n", val);
+////
+
+	for (j = 0; j < 0x5 ; j++) {
+        asm volatile("mrs %0, cntpct_el0" : "=r" (val));
+		dev_dbg(dev, "XXX pl031_read_time val mrs cntpct_el0 = 0x%lx\n", val);
+	}
+	for (j = 0; j < 0x5 ; j++) {
+        asm volatile("mrs %0, cntvct_el0" : "=r" (val));
+		dev_dbg(dev, "XXX pl031_read_time val mrs cntvct_el0 = 0x%lx\n", val);
+	}
+//	for (j = 0; j < 0x5 ; j++) {
+//    	asm volatile("mrs %0, cntps_ctl_el1" : "=r" (val));
+//		dev_dbg(dev, "XXX pl031_read_time val mrs cntps_ctl_el1 = 0x%lx\n", val);
+//	}
 
 	//long unsigned data = readl(ldata->base + RTC_YLR);
 	//dev_dbg(dev, "XXX pl031_read_time data = 0x%lx\n", data);
 
 	data = readl(ldata->base + RTC_YLR);
-	dev_dbg(dev, "XXX pl031_read_alarm data = 0x%x\n", data);
+	dev_dbg(dev, "XXX pl031_read_time data = 0x%x\n", data);
 	//for (i = 0; i < 0x1000 ; i++) {
 	////for (i = 0x1c; i < 0x21 ; i++) {
 	//	writeb(0xe, ldata->base + i);
@@ -274,10 +332,31 @@ static int pl031_read_time(struct device *dev, struct rtc_time *tm)
 		//for (i = 0; i < 0x8 ; i++) {
 			//writeb(j, ldata->base + i); // XXX
 			writeb(0xe, ldata->base + i); // XXX
+			flush_tlb_all();
 			data = readb(ldata->base + i);
-			dev_dbg(dev, "XXX pl031_read_alarm data[%x] = 0x%x\n", i, data);
+//			asm volatile("ldr w0, [%0, 0]!" : "=r" (data) : "r" (ldata->base + i));
+			dev_dbg(dev, "XXX pl031_read_time data[%x] = 0x%x\n", i, data);
 		}
 	//}
+
+	get_cpu_ftr(ID_AA64ISAR0_EL1);
+	get_cpu_ftr(ID_AA64ISAR1_EL1);
+	get_cpu_ftr(ID_AA64MMFR0_EL1);
+	get_cpu_ftr(ID_AA64MMFR1_EL1);
+	get_cpu_ftr(ID_AA64PFR0_EL1);
+	get_cpu_ftr(ID_AA64PFR1_EL1);
+	get_cpu_ftr(ID_AA64DFR0_EL1);
+	get_cpu_ftr(ID_AA64DFR1_EL1);
+
+	get_cpu_ftr(MIDR_EL1);
+	get_cpu_ftr(MPIDR_EL1);
+	get_cpu_ftr(REVIDR_EL1);
+
+	//get_cpu_ftr_sys(SYS_DBGVCR32_EL2);
+	//get_cpu_ftr_sys(SYS_PMSCR_EL2);
+	//get_cpu_ftr_sys(SYS_ICH_LR9_EL2);
+	get_cpu_ftr_sys(SYS_CNTFRQ_EL0);
+	get_cpu_ftr_sys(SYS_CNTKCTL_EL1);
 
 	return 0;
 }
